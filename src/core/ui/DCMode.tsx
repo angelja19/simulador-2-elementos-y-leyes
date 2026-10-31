@@ -107,14 +107,14 @@ export function DCMode(p: DCModeProps) {
             </select>
           </label>
         )}
-        <label className="row">
+        {curMethod !== 'reduccion' && <label className="row">
           Resolver el sistema por:
           <select value={sys} onChange={(e) => setSys(e.target.value as SolveMethod)}>
             <option value="gauss">Gauss</option>
             <option value="cramer">Cramer (determinantes)</option>
             <option value="sustitucion">Sustitución</option>
           </select>
-        </label>
+        </label>}
       </div>
       {sol && <StepsView doc={sol} />}
     </div>

@@ -46,7 +46,7 @@ export function describeElement(e: NetElement, net: Analysis['net']): string {
     case 'C':
       return `Capacitor $${e.label} = ${texQ(e.value, 'F')}$ (en DC: circuito abierto)`;
     case 'SW':
-      return `Interruptor ${e.label} (${e.swMode === 'open' ? 'abierto' : 'cerrado'} en régimen permanente)`;
+      return `Interruptor ${e.label}: ${e.swMode === 'open' ? 'cerrado' : 'abierto'} para t < t₀ y se ${e.swMode === 'open' ? 'abre' : 'cierra'} en t₀ = ${e.t0 ?? 0} s`;
     default:
       return e.label;
   }
@@ -79,7 +79,8 @@ function eqBlocks(eqs: SysEq[], order: string[], controls: string[] = []): Block
       out.push(P(e.title + (hasCtrl ? '' : '')));
       out.push(T(e.raw, `(${e.n})`));
       const { lin, factor } = integerize(e.lin);
-      out.push(T(`\\Rightarrow\\; ${texEq(lin, order)}${factor !== 1 ? `\\qquad (\\times ${factor})` : ''}${hasCtrl ? '\\qquad \\text{(sustituyendo el control)}' : ''}`));
+      const usesCtrl = hasCtrl && /\\cdot|[0-9]+[A-Za-z]_|[A-Za-z]_\{[^}]*\}/.test(e.raw) && controls.some((c) => e.raw.includes(c.split(' = ')[0]));
+      out.push(T(`\\Rightarrow\\; ${texEq(lin, order)}${factor !== 1 ? `\\qquad (\\times ${factor})` : ''}${usesCtrl ? '\\qquad \\text{(sustituyendo el control)}' : ''}`));
     }
   }
   return out;
@@ -140,7 +141,7 @@ export function dcSolution(a: Analysis, method: DCMethod, sys: SolveMethod = 'ga
     if (!m.ok) {
       dev.push(P(`⚠ ${m.error}`));
     } else {
-      dev.push(P(`Mallas (sentido horario): ${m.meshNames.map((x) => `$${x}$`).join(', ')}.${m.supermeshes.length ? ' Supermallas: ' + m.supermeshes.map((s) => `mallas ${s.meshes.join('+')} (fuente${s.sources.length > 1 ? 's' : ''} ${s.sources.join(', ')})`).join('; ') + '.' : ''}`));
+      dev.push(P(`Mallas (sentido horario): ${m.meshNames.map((x) => `$${x}$`).join(', ')}.${m.supermeshes.filter((s) => s.meshes.length > 1).length ? ' Supermallas: ' + m.supermeshes.filter((s) => s.meshes.length > 1).map((s) => `mallas ${s.meshes.join('+')} (fuente${s.sources.length > 1 ? 's' : ''} ${s.sources.join(', ')})`).join('; ') + '.' : ''}`));
       if (m.controls.length) {
         dev.push(H('Variables de control en función de las corrientes de malla'));
         for (const c of m.controls) dev.push(T(c));
@@ -248,7 +249,7 @@ export function reductionDoc(a: Analysis): StepDoc {
   const dev: Block[] = [];
   let concept = 'Reducción: se combinan resistencias en serie ($R_1 + R_2$) y en paralelo ($R_1R_2/(R_1+R_2)$) hasta obtener una sola resistencia equivalente vista por la fuente; luego se regresa paso a paso al circuito original con la ley de Ohm y los divisores de voltaje y corriente.';
   if (sources.length !== 1 || isDependent(sources[0].kind)) {
-    dev.push(P('La reducción directa sirve cuando hay UNA sola fuente independiente. Este circuito tiene ' + sources.length + ' fuentes: use nodos, mallas o superposición.'));
+    dev.push(P(sources.length === 0 ? 'No hay fuentes: solo se puede calcular la resistencia equivalente entre dos terminales (herramienta de la ventanilla 1).' : 'La reducción directa sirve cuando hay UNA sola fuente independiente. Este circuito tiene ' + sources.length + ' fuentes: use nodos, mallas o superposición.'));
     return { title: 'Reducción serie‑paralelo', concept, identification: identification(a), laws: [], development: dev, results: a.dc ? resultsBlocks(a) : [], verification: a.dc ? verification(a, []) : [], tip: 'Con varias fuentes, superposición + reducción es otra opción.' };
   }
   const s = sources[0];
@@ -264,6 +265,7 @@ export function reductionDoc(a: Analysis): StepDoc {
     if (s.kind === 'V') dev.push(T(`I_{total} = \\frac{E}{R_{eq}} = \\frac{${texNum(s.value, 5)}}{${texNum(red.Req, 5)}} = ${texQ(-x.i, 'A')}`));
     else dev.push(T(`V = I_s\\,R_{eq} = ${texNum(s.value, 5)}\\cdot ${texNum(red.Req, 5)} = ${texQ(-x.v, 'V')}`));
     dev.push(H('Regreso al circuito original'));
+    dev.push(P('Se recorren las etapas al revés: en cada serie la corriente es la misma y el voltaje se reparte (divisor de voltaje); en cada paralelo el voltaje es el mismo y la corriente se reparte (divisor de corriente). Así se obtiene el voltaje de cada resistencia y con Ohm su corriente:'));
     for (const e of net.elements.filter((x) => x.kind === 'R')) {
       const r = a.dc!.el.get(e.id)!;
       dev.push(T(`I_{${e.label}} = \\frac{V_{${e.label}}}{R} = \\frac{${texNum(r.v, 5)}}{${texNum(e.value, 5)}} = ${texQ(r.i, 'A')}`));
@@ -296,8 +298,9 @@ export function countEquations(a: Analysis): MethodCount {
   const vl = net.elements.filter((e) => isVoltageSourceLike(e.kind) || e.kind === 'AM').length;
   const il = net.elements.filter((e) => isCurrentSourceLike(e.kind)).length;
   const nodos = Math.max(0, a.topo.nodes - 1 - vl);
-  const mallas = Math.max(0, a.topo.meshes.length - il);
-  const ramas = a.topo.branches.length + il;
+  const nonPlanar = a.topo.crossings.length > 0 || a.topo.nonPlanarByEuler || a.topo.meshes.length !== a.topo.independentLoops;
+  const mallas = nonPlanar ? Infinity : Math.max(0, a.topo.meshes.length - il);
+  const ramas = a.topo.branches.length;
   const sources = net.elements.filter((e) => isVoltageSourceLike(e.kind) || isCurrentSourceLike(e.kind));
   let reducible = false;
   if (sources.length === 1 && !isDependent(sources[0].kind)) {
@@ -331,7 +334,7 @@ export function betterWayDC(a: Analysis): BetterDoc {
   return {
     method,
     why,
-    savings: `Corrientes de rama: ${c.ramas} incógnitas · Nodos: ${c.nodos} · Mallas: ${c.mallas}${c.reducible ? ' · Reducción: 0 sistemas' : ''}. El método recomendado ahorra ${Math.max(0, c.ramas - best)} ecuación(es) respecto al método de ramas.`,
+    savings: `Corrientes de rama: ${c.ramas} incógnitas · Nodos: ${c.nodos} · Mallas: ${isFinite(c.mallas) ? c.mallas : 'no aplica (no planar)'}${c.reducible ? ' · Reducción: 0 sistemas' : ''}. El método recomendado ahorra ${Math.max(0, c.ramas - best)} ecuación(es) respecto al método de ramas.`,
     formulas: [
       { tex: 'I = \\frac{V_i - V_j}{R}', meaning: 'Corriente que SALE del nodo i hacia el nodo j por una resistencia (ley de Ohm).' },
       { tex: 'V_{(+)} - V_{(-)} = E', meaning: 'Ecuación del supernodo: la fuente fija la diferencia entre sus dos nodos.' },

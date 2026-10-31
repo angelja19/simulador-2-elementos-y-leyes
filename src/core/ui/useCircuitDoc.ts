@@ -32,6 +32,8 @@ export interface CircuitDoc {
   canRedo: boolean;
   load: (c: Circuit) => void;
   shareUrl: () => string;
+  /** se incrementa cada vez que se carga un circuito completo */
+  loadCount: number;
 }
 
 export function useCircuitDoc(key: string, initial: Circuit): CircuitDoc {
@@ -98,7 +100,14 @@ export function useCircuitDoc(key: string, initial: Circuit): CircuitDoc {
     });
     force((x) => x + 1);
   }, []);
-  const load = useCallback((c: Circuit) => set(JSON.parse(JSON.stringify(c))), [set]);
+  const [loadCount, setLoadCount] = useState(0);
+  const load = useCallback(
+    (c: Circuit) => {
+      set(JSON.parse(JSON.stringify(c)));
+      setLoadCount((n) => n + 1);
+    },
+    [set],
+  );
   // abrir un enlace compartido en la misma pestaña (solo cambia el #)
   useEffect(() => {
     const h = () => {
@@ -110,5 +119,5 @@ export function useCircuitDoc(key: string, initial: Circuit): CircuitDoc {
     return () => window.removeEventListener('hashchange', h);
   }, [load]);
   const shareUrl = useCallback(() => `${location.origin}${location.pathname}#c=${encodeCircuit(present)}`, [present]);
-  return { circuit: present, set, preview, commit, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, load, shareUrl };
+  return { circuit: present, set, preview, commit, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, load, shareUrl, loadCount };
 }

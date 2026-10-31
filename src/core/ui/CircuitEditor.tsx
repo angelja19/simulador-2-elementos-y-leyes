@@ -64,6 +64,11 @@ export function CircuitEditor(props: EditorProps) {
   const drag = useRef<{ mode: 'move' | 'pan'; start: Pt; orig: CElement | null; view?: typeof view; moved: boolean; pointerId: number } | null>(null);
 
   useEffect(() => setPicked([]), [props.pick]);
+  // encuadrar cuando se carga un circuito nuevo (plantilla, archivo o enlace)
+  useEffect(() => {
+    if (doc.loadCount) setView(fitView(doc.circuit));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.loadCount]);
   useEffect(() => {
     props.onSelect?.(sel?.el ? { element: sel.el } : sel?.node !== undefined ? { node: sel.node } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -461,8 +466,8 @@ export function CircuitEditor(props: EditorProps) {
         <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && loadJSON(e.target.files[0])} />
         {props.toolbarExtra}
       </div>
-      {(props.pick || tool.t !== 'select') && (
-        <div className="hint no-print" role="status">
+      {(
+        <div className="hint no-print" role="status" style={{ minHeight: 36 }}>
           {props.pick
             ? `${props.pick.prompt} (${picked.length}/${props.pick.count})`
             : tool.t === 'wire'
@@ -471,7 +476,9 @@ export function CircuitEditor(props: EditorProps) {
                 : 'Toque el punto de inicio del cable (un terminal o un punto de la grilla).'
               : tool.t === 'place'
                 ? `Toque en el lienzo para colocar: ${KIND_INFO[tool.kind].name}.`
-                : 'Toque un nodo para ponerle nombre (a, b, c…).'}
+                : tool.t === 'name'
+                  ? 'Toque un nodo para ponerle nombre (a, b, c…).'
+                  : 'Toque un componente de la paleta y luego el lienzo. Seleccione un elemento para editar su valor.'}
         </div>
       )}
       <div
@@ -558,7 +565,7 @@ export function CircuitEditor(props: EditorProps) {
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <circle cx={p.x * U} cy={p.y * U} r={props.pick?.kind === 'node' ? 9 : 6} fill={isErr ? pal.err : isHi ? pal.sel : 'transparent'} stroke={isErr ? pal.err : isHi ? pal.sel : pal.node} strokeWidth={1.5} opacity={0.85} />
+                  <circle cx={p.x * U} cy={p.y * U} r={props.pick?.kind === 'node' ? 15 : 6} fill={isErr ? pal.err : isHi ? pal.sel : 'transparent'} stroke={isErr ? pal.err : isHi ? pal.sel : pal.node} strokeWidth={1.5} opacity={0.85} />
                   <text x={p.x * U + 6} y={p.y * U - 8} fontSize={11.5} fill={isErr ? pal.err : pal.node} fontWeight={600}>
                     {n === 0 ? '⏚ ref' : `(${name})`}
                     {showVals && v !== undefined && n !== 0 ? ` ${fmtEng(v, 'V', 4)}` : ''}
@@ -616,7 +623,7 @@ export function fitView(c: Circuit) {
     ys.push(w.a.y, w.b.y);
   }
   if (!xs.length) return { x: -2 * U, y: -6 * U, w: 30 * U, h: 18 * U };
-  const minX = Math.min(...xs) - 4.5;
+  const minX = Math.min(...xs) - 6;
   const maxX = Math.max(...xs) + 4;
   const minY = Math.min(...ys) - 3;
   const maxY = Math.max(...ys) + 3;

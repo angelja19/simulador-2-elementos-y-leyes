@@ -279,6 +279,9 @@ h4 {
   .modes {
     flex-wrap: nowrap;
     overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+    padding-right: 40px;
     padding: 6px 8px 0;
     scrollbar-width: thin;
   }

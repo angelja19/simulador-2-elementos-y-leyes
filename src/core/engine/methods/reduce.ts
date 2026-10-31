@@ -71,14 +71,14 @@ export function reduceNetwork(edgesIn: REdge[], s: number, t: number): ReduceRes
     const sc = edges.find((e) => e.a === e.b);
     if (sc) {
       edges = edges.filter((e) => e !== sc);
-      steps.push({ kind: 'corto', inputs: [sc.name], outputs: [], tex: `${sc.name}\\ \\text{está en cortocircuito (sus dos extremos en el mismo nodo): no aporta}`, text: `${sc.name} está cortocircuitada y no aporta nada.`, edges: snapshot() });
+      steps.push({ kind: 'corto', inputs: [sc.name], outputs: [], tex: `${sc.name}\\ \\text{está en cortocircuito (sus dos extremos en el mismo nodo): no aporta}`, text: `$${sc.name}$ está cortocircuitada y no aporta nada.`, edges: snapshot() });
       continue;
     }
     // 1) ramas colgantes: nodo de grado 1 que no es terminal
     const dang = edges.find((e) => (degree(e.a) === 1 && e.a !== s && e.a !== t) || (degree(e.b) === 1 && e.b !== s && e.b !== t));
     if (dang) {
       edges = edges.filter((e) => e !== dang);
-      steps.push({ kind: 'colgante', inputs: [dang.name], outputs: [], tex: `${dang.name}\\ \\text{tiene un extremo libre: no circula corriente, se elimina}`, text: `${dang.name} queda con un extremo libre: no conduce corriente.`, edges: snapshot() });
+      steps.push({ kind: 'colgante', inputs: [dang.name], outputs: [], tex: `${dang.name}\\ \\text{tiene un extremo libre: no circula corriente, se elimina}`, text: `$${dang.name}$ queda con un extremo libre: no conduce corriente.`, edges: snapshot() });
       continue;
     }
     if (edges.length === 1 && ((edges[0].a === s && edges[0].b === t) || (edges[0].a === t && edges[0].b === s))) break;
@@ -95,7 +95,7 @@ export function reduceNetwork(edgesIn: REdge[], s: number, t: number): ReduceRes
         if (grp.length === 2) tex = `${nm} = \\dfrac{${grp[0].name}\\cdot ${grp[1].name}}{${grp[0].name} + ${grp[1].name}} = \\dfrac{${fmt(grp[0].R)}\\cdot ${fmt(grp[1].R)}}{${fmt(grp[0].R)} + ${fmt(grp[1].R)}} = ${fmt(R)}\\ [\\Omega]`;
         else if (grp.length === 3) tex = `${nm} = \\dfrac{${grp.map((g) => g.name).join('\\,')}}{${grp[0].name}${grp[1].name} + ${grp[0].name}${grp[2].name} + ${grp[1].name}${grp[2].name}} = ${fmt(R)}\\ [\\Omega]`;
         else tex = `\\dfrac{1}{${nm}} = ${grp.map((g) => `\\dfrac{1}{${fmt(g.R)}}`).join(' + ')} \\Rightarrow ${nm} = ${fmt(R)}\\ [\\Omega]`;
-        steps.push({ kind: 'paralelo', inputs: grp.map((g) => g.name), outputs: [nm], tex, text: `${grp.map((g) => g.name).join(' ∥ ')} están en paralelo (mismos dos nodos).`, edges: snapshot() });
+        steps.push({ kind: 'paralelo', inputs: grp.map((g) => g.name), outputs: [nm], tex, text: `${grp.map((g) => `$${g.name}$`).join(' ∥ ')} están en paralelo (mismos dos nodos).`, edges: snapshot() });
         done = true;
       }
     }
@@ -110,7 +110,7 @@ export function reduceNetwork(edgesIn: REdge[], s: number, t: number): ReduceRes
       const R = pair[0].R + pair[1].R;
       const nm = newName();
       edges = edges.filter((e) => !pair.includes(e)).concat({ id: nm, name: nm, R, a: o1, b: o2, from: pair.flatMap((g) => g.from) });
-      steps.push({ kind: 'serie', inputs: pair.map((g) => g.name), outputs: [nm], tex: `${nm} = ${pair[0].name} + ${pair[1].name} = ${fmt(pair[0].R)} + ${fmt(pair[1].R)} = ${fmt(R)}\\ [\\Omega]`, text: `${pair[0].name} y ${pair[1].name} están en serie (el nodo entre ellos no tiene otra conexión).`, edges: snapshot() });
+      steps.push({ kind: 'serie', inputs: pair.map((g) => g.name), outputs: [nm], tex: `${nm} = ${pair[0].name} + ${pair[1].name} = ${fmt(pair[0].R)} + ${fmt(pair[1].R)} = ${fmt(R)}\\ [\\Omega]`, text: `$${pair[0].name}$ y $${pair[1].name}$ están en serie (el nodo entre ellos no tiene otra conexión).`, edges: snapshot() });
       done = true;
       break;
     }
@@ -126,7 +126,7 @@ export function reduceNetwork(edgesIn: REdge[], s: number, t: number): ReduceRes
     const ny = `R_{y${eqCount + 1}}`;
     const nz = `R_{z${eqCount + 1}}`;
     eqCount++;
-    if (!proposal) proposal = `Transformar el triángulo formado por ${e12.name}, ${e13.name} y ${e23.name} en una estrella.`;
+    if (!proposal) proposal = `Transformar el triángulo formado por ${[e12, e13, e23].map((x) => x.name.replace(/[{}_\\]/g, '')).join(', ')} en una estrella.`;
     edges = edges.filter((e) => e !== e12 && e !== e13 && e !== e23).concat(
       { id: nx, name: nx, R: Rx, a: n1, b: c, from: [...e12.from, ...e13.from] },
       { id: ny, name: ny, R: Ry, a: n2, b: c, from: [...e12.from, ...e23.from] },
@@ -138,7 +138,7 @@ export function reduceNetwork(edgesIn: REdge[], s: number, t: number): ReduceRes
       inputs: [e12.name, e13.name, e23.name],
       outputs: [nx, ny, nz],
       tex: `${nx} = \\dfrac{${e12.name}\\,${e13.name}}{\\Sigma} = \\dfrac{${fmt(e12.R)}\\cdot ${fmt(e13.R)}}{${fmt(S)}} = ${fmt(Rx)};\\quad ${ny} = \\dfrac{${e12.name}\\,${e23.name}}{\\Sigma} = ${fmt(Ry)};\\quad ${nz} = \\dfrac{${e13.name}\\,${e23.name}}{\\Sigma} = ${fmt(Rz)}\\ [\\Omega]`,
-      text: `La red no se puede reducir solo con serie y paralelo: se transforma el triángulo ${e12.name}–${e13.name}–${e23.name} en estrella (Σ = ${fmt(S).replace('{,}', ',')} Ω).`,
+      text: `La red no se puede reducir solo con serie y paralelo: se transforma el triángulo $${e12.name}$–$${e13.name}$–$${e23.name}$ en estrella ($\\Sigma = ${fmt(S)}$ Ω).`,
       edges: snapshot(),
       newNode: c,
     });
